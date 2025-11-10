@@ -1,28 +1,32 @@
 import streamlit as st
 import sqlite3
 
+# إعداد الصفحة والشعار
+st.set_page_config(page_title="منصة Jsaas", layout="centered")
+try:
+    st.image("logo.png", width=120)
+except:
+    st.warning("⚠️ لم يتم العثور على ملف الشعار logo.png")
+
+st.title("منصة Jsaas للخدمات الذكية")
+
 DB_NAME = "maintenance.db"
 
-# =========================
 # تهيئة قاعدة البيانات
-# =========================
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    # جدول المستخدمين
     c.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             phone TEXT,
             email TEXT,
-            role TEXT DEFAULT 'client',      -- client / technician / admin
-            admin_type TEXT DEFAULT NULL,    -- super / viewer
-            approved INTEGER DEFAULT 0,
+            role TEXT DEFAULT 'client',
+            approved INTEGER DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-    # جدول الطلبات
     c.execute('''
         CREATE TABLE IF NOT EXISTS requests (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,20 +44,20 @@ def init_db():
 
 init_db()
 
-# =========================
 # دوال المستخدمين
-# =========================
-def register_user(name, phone, email, role, admin_type=None):
+def register_user(name, phone, email):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     c.execute('SELECT * FROM users WHERE phone=? OR email=?', (phone, email))
     if c.fetchone():
         conn.close()
         return False
-    c.execute('''
-        INSERT INTO users (name, phone, email, role, admin_type, approved)
-        VALUES (?, ?, ?, ?, ?, ?)
-    ''', (name, phone, email, role, admin_type, 1 if role=="client" or role=="admin" else 0))
+    # فقط Mohamed Atef Salah يكون Super Admin
+    if name.strip() == "Mohamed Atef Salah" and email.strip() == "masalah199685@gmail.com":
+        role = "admin"
+    else:
+        role = "client"
+    c.execute('INSERT INTO users (name, phone, email, role) VALUES (?, ?, ?, ?)', (name, phone, email, role))
     conn.commit()
     conn.close()
     return True
@@ -66,20 +70,15 @@ def login_user(phone_or_email):
     conn.close()
     return user
 
-def approve_technician(user_id):
+def save_request(user_id, service, desc, location):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute('UPDATE users SET approved=1 WHERE id=?', (user_id,))
+    c.execute('''
+        INSERT INTO requests (user_id, service_type, description, location)
+        VALUES (?, ?, ?, ?)
+    ''', (user_id, service, desc, location))
     conn.commit()
     conn.close()
-
-def get_pending_technicians():
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute("SELECT id, name, phone, email FROM users WHERE role='technician' AND approved=0")
-    data = c.fetchall()
-    conn.close()
-    return data
 
 def get_all_requests():
     conn = sqlite3.connect(DB_NAME)
@@ -93,21 +92,8 @@ def get_all_requests():
     conn.close()
     return data
 
-def save_request(user_id, service, desc, location):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute('''
-        INSERT INTO requests (user_id, service_type, description, location)
-        VALUES (?, ?, ?, ?)
-    ''', (user_id, service, desc, location))
-    conn.commit()
-    conn.close()
-
-# =========================
-# واجهة التطبيق
-# =========================
-st.set_page_config(page_title="منصة Jsaas", layout="centered")
-st.title("منصة Jsaas للخدمات الذكية")
+# واجهة التسجيل والدخول
+st.subheader("المصادقة")
 
 mode = st.radio("اختر العملية", ["تسجيل دخول", "تسجيل جديد"])
 
@@ -115,9 +101,45 @@ if mode == "تسجيل جديد":
     name = st.text_input("الاسم الكامل")
     phone = st.text_input("رقم الجوال")
     email = st.text_input("البريد الإلكتروني")
-    role_label = st.selectbox("نوع المستخدم", ["عميل", "فني", "إدارة (Super)", "إدارة (Viewer)"])
+    if st.button("تسجيل"):
+        if not name or not (phone or email):
+            st.error("يرجى إدخال الاسم ورقم الجوال أو البريد الإلكتروني")
+        else:
+            success = register_user(name, phone, email)
+            if success:
+                st.success("✅ تم إنشاء الحساب بنجاح")
+            else:
+                st.warning("⚠️ هذا المستخدم مسجل مسبقًا")
 
-    if role_label == "عميل":
-        role, admin_type = "client", None
-    elif role_label == "فني":
-        role, admin_type = "technician",
+else:
+    phone_or_email = st.text_input("رقم الجوال أو البريد الإلكتروني")
+    if st.button("دخول"):
+        user = login_user(phone_or_email)
+        if user:
+            st.session_state["user"] = user
+            st.success(f"مرحبًا {user[1]} 👋")
+        else:
+            st.error("❌ لم يتم العثور على مستخدم بهذا الرقم أو البريد")
+
+# واجهة العميل
+if "user" in st.session_state:
+    user = st.session_state["user"]
+    if user[3] == "client":
+        st.subheader("📌 طلب خدمة جديدة")
+        service = st.selectbox("نوع الخدمة", ["كهرباء", "سباكة", "تكييف", "تنظيف", "أخرى"])
+        desc = st.text_area("وصف المشكلة")
+        location = st.text_input("الموقع الجغرافي")
+        if st.button("إرسال الطلب"):
+            if not desc.strip() or not location.strip():
+                st.error("❌ يرجى تعبئة جميع الحقول المطلوبة")
+            else:
+                save_request(user[0], service, desc, location)
+                st.success("✅ تم إرسال الطلب بنجاح")
+                st.balloons()
+
+# لوحة الإدارة (فقط لحسابك)
+if "user" in st.session_state and st.session_state["user"][3] == "admin":
+    st.subheader("👑 لوحة الإدارة")
+    requests = get_all_requests()
+    for req in requests:
+        st.write(f"طلب رقم {req[0]} | {req[2]} | الحالة: {req[5]} | العميل: {req[1]} | التاريخ: {req[6]}")
