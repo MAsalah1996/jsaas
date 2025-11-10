@@ -4,11 +4,11 @@ import streamlit as st
 import sqlite3
 import os
 import openai
-from streamlit_arabic_support_wrapper import support_arabic_text
 
+# إعداد مفتاح OpenAI (اختياري)
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# إنشاء قاعدة البيانات
+# إنشاء قاعدة البيانات وجدول التذاكر لو مش موجود
 def init_db():
     conn = sqlite3.connect('maintenance.db')
     c = conn.cursor()
@@ -27,7 +27,7 @@ def init_db():
     conn.commit()
     conn.close()
 
-# إدخال تذكرة
+# إدخال تذكرة جديدة
 def insert_ticket(name, phone, issue_type, description, assigned_to, location):
     conn = sqlite3.connect('maintenance.db')
     c = conn.cursor()
@@ -51,17 +51,18 @@ def view_tickets():
 init_db()
 
 # واجهة Streamlit
-support_arabic_text()  # تفعيل دعم العربية
+st.set_page_config(page_title="نموذج طلب جديد", layout="centered", initial_sidebar_state="auto")
+st.title("📌 نموذج طلب جديد من العميل")
 
-st.title("طلب جديد من العميل")
-
+# نموذج الإدخال
 name = st.text_input("الاسم الكامل")
 phone = st.text_input("رقم الجوال")
 issue_type = st.selectbox("نوع المشكلة", ["اختر نوع المشكلة", "كهرباء", "سباكة", "نظام", "أخرى"])
 description = st.text_area("وصف المشكلة")
 assigned_to = st.text_input("تعيين إلى (اسم الفني أو القسم)")
-location = st.text_input("الموقع الجغرافي (رابط أو عنوان)")
+location = st.text_input("الموقع الجغرافي (رابط Google Maps أو عنوان واضح)")
 
+# زر الإرسال
 if st.button("إرسال الطلب"):
     if not name.strip():
         st.error("❌ يرجى إدخال الاسم الكامل")
@@ -79,6 +80,7 @@ if st.button("إرسال الطلب"):
         insert_ticket(name, phone, issue_type, description, assigned_to, location)
         st.success("✅ تم إرسال الطلب بنجاح")
 
+# عرض التذاكر السابقة
 st.subheader("📋 الطلبات السابقة")
 tickets = view_tickets()
 for ticket in tickets:
