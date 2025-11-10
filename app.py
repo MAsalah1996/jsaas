@@ -52,8 +52,12 @@ def register_user(name, phone, email):
     if c.fetchone():
         conn.close()
         return False
-    # فقط Mohamed Atef Salah يكون Super Admin
-    if name.strip() == "Mohamed Atef Salah" and email.strip() == "masalah199685@gmail.com":
+    # تحقق من بيانات Super Admin
+    if (
+        name.strip() == "Mohamed Atef Salah" and
+        email.strip().lower() == "masalah199685@gmail.com" and
+        phone.strip() == "0534706423"
+    ):
         role = "admin"
     else:
         role = "client"
@@ -112,4 +116,46 @@ if mode == "تسجيل جديد":
                 st.warning("⚠️ هذا المستخدم مسجل مسبقًا")
 
 else:
-    phone_or_email =
+    phone_or_email = st.text_input("رقم الجوال أو البريد الإلكتروني")
+    if st.button("دخول"):
+        user = login_user(phone_or_email)
+        if user:
+            st.session_state["user"] = user
+            # تحقق من صلاحية Super Admin
+            if (
+                user[1] == "Mohamed Atef Salah" and
+                user[3].lower() == "masalah199685@gmail.com" and
+                user[2] == "0534706423" and
+                user[4] == "admin"
+            ):
+                st.session_state["user_role"] = "admin"
+            else:
+                st.session_state["user_role"] = "client"
+            st.success(f"مرحبًا {user[1]} 👋")
+        else:
+            st.error("❌ لم يتم العثور على مستخدم بهذا الرقم أو البريد")
+
+# واجهة العميل
+if "user_role" in st.session_state and st.session_state["user_role"] == "client":
+    user = st.session_state["user"]
+    st.subheader("📌 طلب خدمة جديدة")
+    service = st.selectbox("نوع الخدمة", ["كهرباء", "سباكة", "تكييف", "تنظيف", "أخرى"])
+    desc = st.text_area("وصف المشكلة")
+    location = st.text_input("الموقع الجغرافي")
+    if st.button("إرسال الطلب"):
+        if not desc.strip() or not location.strip():
+            st.error("❌ يرجى تعبئة جميع الحقول المطلوبة")
+        else:
+            save_request(user[0], service, desc, location)
+            st.success("✅ تم إرسال الطلب بنجاح")
+            st.balloons()
+
+# لوحة الإدارة (فقط لحسابك)
+if "user_role" in st.session_state and st.session_state["user_role"] == "admin":
+    st.subheader("👑 لوحة الإدارة")
+    requests = get_all_requests()
+    if requests:
+        for req in requests:
+            st.write(f"طلب رقم {req[0]} | {req[2]} | الحالة: {req[5]} | العميل: {req[1]} | التاريخ: {req[6]}")
+    else:
+        st.info("لا توجد طلبات حتى الآن.")
