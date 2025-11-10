@@ -1,95 +1,85 @@
+# app.py
+
 import streamlit as st
 import sqlite3
-from db import init_db
-import openai
 import os
-import pandas as pd
-import matplotlib.pyplot as plt
+import openai
+from streamlit_arabic_support_wrapper import support_arabic_text
 
-# إعداد المفتاح
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# تهيئة قاعدة البيانات
-init_db()
-
-# إدخال طلب جديد
-def insert_ticket(name, phone, issue_type, description, assigned_to):
+# إنشاء قاعدة البيانات
+def init_db():
     conn = sqlite3.connect('maintenance.db')
     c = conn.cursor()
     c.execute('''
-        INSERT INTO tickets (customer_name, phone, issue_type, description, status, assigned_to)
-        VALUES (?, ?, ?, ?, 'جديد', ?)
-    ''', (name, phone, issue_type, description, assigned_to))
+        CREATE TABLE IF NOT EXISTS tickets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            phone TEXT NOT NULL,
+            issue_type TEXT NOT NULL,
+            description TEXT NOT NULL,
+            assigned_to TEXT NOT NULL,
+            location TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
     conn.commit()
     conn.close()
 
-# جلب الطلبات
-def get_tickets():
+# إدخال تذكرة
+def insert_ticket(name, phone, issue_type, description, assigned_to, location):
+    conn = sqlite3.connect('maintenance.db')
+    c = conn.cursor()
+    c.execute('''
+        INSERT INTO tickets (name, phone, issue_type, description, assigned_to, location)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (name, phone, issue_type, description, assigned_to, location))
+    conn.commit()
+    conn.close()
+
+# عرض التذاكر
+def view_tickets():
     conn = sqlite3.connect('maintenance.db')
     c = conn.cursor()
     c.execute('SELECT * FROM tickets ORDER BY created_at DESC')
-    rows = c.fetchall()
+    tickets = c.fetchall()
     conn.close()
-    return rows
+    return tickets
 
-# رد ذكي باستخدام GPT
-def ai_response(description):
-    prompt = f"عميل أرسل المشكلة التالية: {description}\nاقترح رد مهني مختصر:"
-    response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
-        messages=[{"role":"user", "content": prompt}]
-    )
-    return response.choices[0].message.content.strip()
+# تشغيل قاعدة البيانات
+init_db()
 
-# إعداد الصفحة
-st.set_page_config(page_title="Jsaas - نظام الصيانة الذكي", layout="wide")
-st.title("🛠️ Jsaas | نظام إدارة طلبات الصيانة")
+# واجهة Streamlit
+support_arabic_text()  # تفعيل دعم العربية
 
-# نموذج إدخال
-with st.form("new_ticket"):
-    st.subheader("إدخال طلب جديد")
-    name = st.text_input("اسم العميل")
-    phone = st.text_input("رقم الجوال")
-    issue_type = st.selectbox("نوع المشكلة", ["كهرباء", "كاميرات", "شبكة", "أخرى"])
-    description = st.text_area("وصف المشكلة")
-    assigned_to = st.text_input("الموظف المسؤول")
-    submitted = st.form_submit_button("إرسال الطلب")
-    if submitted:
-        insert_ticket(name, phone, issue_type, description, assigned_to)
-        st.success("✅ تم تسجيل الطلب بنجاح")
+st.title("طلب جديد من العميل")
 
-# عرض الطلبات
-st.subheader("📋 الطلبات الحالية")
-tickets = get_tickets()
-for t in tickets:
-    st.markdown(f"**#{t[0]} | {t[1]} | {t[3]} | الحالة: {t[5]}**")
-    st.markdown(f"📞 {t[2]} | 👨‍🔧 {t[6]} | 🕒 {t[7]}")
-    st.markdown(f"📝 {t[4]}")
-    if st.button(f"رد ذكي للطلب #{t[0]}", key=f"ai_{t[0]}"):
-        reply = ai_response(t[4])
-        st.info(f"🤖 الرد المقترح: {reply}")
-    st.markdown("---")
+name = st.text_input("الاسم الكامل")
+phone = st.text_input("رقم الجوال")
+issue_type = st.selectbox("نوع المشكلة", ["اختر نوع المشكلة", "كهرباء", "سباكة", "نظام", "أخرى"])
+description = st.text_area("وصف المشكلة")
+assigned_to = st.text_input("تعيين إلى (اسم الفني أو القسم)")
+location = st.text_input("الموقع الجغرافي (رابط أو عنوان)")
 
-# تقارير مرئية
-st.subheader("📈 تقارير الطلبات")
-conn = sqlite3.connect('maintenance.db')
-df = pd.read_sql_query("SELECT * FROM tickets", conn)
+if st.button("إرسال الطلب"):
+    if not name.strip():
+        st.error("❌ يرجى إدخال الاسم الكامل")
+    elif not phone.strip():
+        st.error("❌ يرجى إدخال رقم الجوال")
+    elif issue_type == "اختر نوع المشكلة":
+        st.error("❌ يرجى اختيار نوع المشكلة")
+    elif not description.strip():
+        st.error("❌ يرجى إدخال وصف المشكلة")
+    elif not assigned_to.strip():
+        st.error("❌ يرجى إدخال اسم الفني أو القسم")
+    elif not location.strip():
+        st.error("❌ يرجى إدخال الموقع الجغرافي")
+    else:
+        insert_ticket(name, phone, issue_type, description, assigned_to, location)
+        st.success("✅ تم إرسال الطلب بنجاح")
 
-# توزيع الحالات
-status_counts = df['status'].value_counts()
-fig1, ax1 = plt.subplots()
-ax1.pie(status_counts, labels=status_counts.index, autopct='%1.1f%%', startangle=90)
-ax1.axis('equal')
-st.pyplot(fig1)
-
-# نوع المشكلة
-issue_counts = df['issue_type'].value_counts()
-fig2, ax2 = plt.subplots()
-ax2.bar(issue_counts.index, issue_counts.values, color='skyblue')
-ax2.set_xlabel("نوع المشكلة")
-ax2.set_ylabel("عدد الطلبات")
-st.pyplot(fig2)
-
-# جدول الطلبات
-st.subheader("📊 أحدث 10 طلبات")
-st.dataframe(df.head(10))
+st.subheader("📋 الطلبات السابقة")
+tickets = view_tickets()
+for ticket in tickets:
+    st.write(f"🔹 {ticket[1]} | {ticket[2]} | {ticket[3]} | {ticket[4]} | {ticket[5]} | {ticket[6]} | {ticket[7]}")
