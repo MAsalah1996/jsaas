@@ -112,34 +112,4 @@ if mode == "تسجيل جديد":
                 st.warning("⚠️ هذا المستخدم مسجل مسبقًا")
 
 else:
-    phone_or_email = st.text_input("رقم الجوال أو البريد الإلكتروني")
-    if st.button("دخول"):
-        user = login_user(phone_or_email)
-        if user:
-            st.session_state["user"] = user
-            st.success(f"مرحبًا {user[1]} 👋")
-        else:
-            st.error("❌ لم يتم العثور على مستخدم بهذا الرقم أو البريد")
-
-# واجهة العميل
-if "user" in st.session_state:
-    user = st.session_state["user"]
-    if user[3] == "client":
-        st.subheader("📌 طلب خدمة جديدة")
-        service = st.selectbox("نوع الخدمة", ["كهرباء", "سباكة", "تكييف", "تنظيف", "أخرى"])
-        desc = st.text_area("وصف المشكلة")
-        location = st.text_input("الموقع الجغرافي")
-        if st.button("إرسال الطلب"):
-            if not desc.strip() or not location.strip():
-                st.error("❌ يرجى تعبئة جميع الحقول المطلوبة")
-            else:
-                save_request(user[0], service, desc, location)
-                st.success("✅ تم إرسال الطلب بنجاح")
-                st.balloons()
-
-# لوحة الإدارة (فقط لحسابك)
-if "user" in st.session_state and st.session_state["user"][3] == "admin":
-    st.subheader("👑 لوحة الإدارة")
-    requests = get_all_requests()
-    for req in requests:
-        st.write(f"طلب رقم {req[0]} | {req[2]} | الحالة: {req[5]} | العميل: {req[1]} | التاريخ: {req[6]}")
+    phone_or_email =
